@@ -1,0 +1,189 @@
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
+
+class Block {
+    private int index;
+    private long timestamp;
+    private String previousHash;
+    private String hash;
+    private List<Transaction> transactions;
+    private int nonce;
+
+    // Constructor
+    public Block(int index, String previousHash, List<Transaction> transactions) {
+        this.index = index;
+        this.timestamp = System.currentTimeMillis() / 1000; // Convert to seconds
+        this.previousHash = previousHash;
+        this.transactions = transactions;
+        this.nonce = 0;
+        this.hash = calculateHash();
+    }
+
+    // Calculate the hash of the block using a secure hashing algorithm (SHA-256)
+    private String calculateHash() {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            StringBuilder data = new StringBuilder();
+            data.append(index)
+                .append(timestamp)
+                .append(previousHash);
+
+            for (Transaction transaction : transactions) {
+                data.append(transaction.toString());
+            }
+
+            data.append(nonce);
+            byte[] hashBytes = digest.digest(data.toString().getBytes(StandardCharsets.UTF_8));
+
+            StringBuilder hexString = new StringBuilder();
+            for (byte hashByte : hashBytes) {
+                String hex = Integer.toHexString(0xff & hashByte);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    // Mining: finding a hash with a specified number of leading zeros (proof-of-work)
+    public void mineBlock(int difficulty) {
+        String target = "0".repeat(difficulty);
+        while (!hash.substring(0, difficulty).equals(target)) {
+            nonce++;
+            hash = calculateHash();
+        }
+        System.out.println("Block mined: " + hash);
+    }
+
+    // Get the hash of the previous block
+    public String getPreviousHash() {
+        return previousHash;
+    }
+
+    // Getters
+    public String getHash() {
+        return hash;
+    }
+}
+
+final class Transaction {
+    private final String sender;
+    private final String recipient;
+    private final double amount;
+
+    // Constructor
+    public Transaction(String sender, String recipient, double amount) {
+        if (sender == null || sender.isEmpty()) {
+            throw new IllegalArgumentException("Invalid sender");
+        }
+        if (recipient == null || recipient.isEmpty()) {
+            throw new IllegalArgumentException("Invalid recipient");
+        }
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Invalid amount");
+        }
+        this.sender = sender;
+        this.recipient = recipient;
+        this.amount = amount;
+    }
+
+    // Getters
+    public String getSender() {
+        return sender;
+    }
+
+    public String getRecipient() {
+        return recipient;
+    }
+
+    public double getAmount() {
+        return amount;
+    }
+
+    @Override
+    public String toString() {
+        return sender + recipient + amount;
+    }
+}
+
+class Blockchain {
+    private List<Block> chain;
+    private int difficulty;
+
+    // Constructor
+    public Blockchain(int difficulty) {
+        this.chain = new ArrayList<>();
+        this.difficulty = difficulty;
+        // Create the genesis block
+        createGenesisBlock();
+    }
+
+    // Create the genesis block (the first block in the chain)
+    private void createGenesisBlock() {
+        List<Transaction> transactions = new ArrayList<>();
+        transactions.add(new Transaction("Genesis", "Alice", 100.0));
+        Block genesisBlock = new Block(0, "", transactions);
+        genesisBlock.mineBlock(difficulty);
+        chain.add(genesisBlock);
+    }
+
+    // Add a new block to the chain
+    public void addBlock(Block newBlock) {
+        newBlock.mineBlock(difficulty);
+        chain.add(newBlock);
+    }
+
+    // Check if the chain is valid by verifying each block's hash and previous hash
+    public boolean isChainValid() {
+        for (int i = 1; i < chain.size(); i++) {
+            Block currentBlock = chain.get(i);
+            Block previousBlock = chain.get(i - 1);
+
+            if (!currentBlock.getHash().equals(currentBlock.calculateHash())) {
+                System.out.println("Block hash invalid.");
+                return false;
+            }
+
+            if (!previousBlock.getHash().equals(currentBlock.getPreviousHash())) {
+                System.out.println("Previous hash invalid.");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Get the hash of the last block in the chain
+    public String getLastBlockHash() {
+        return chain.get(chain.size() - 1).getHash();
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        Blockchain blockchain = new Blockchain(4);
+
+        // Create some transactions
+        List<Transaction> transactions1 = new ArrayList<>();
+        transactions1.add(new Transaction("Alice", "Bob", 50.0));
+        transactions1.add(new Transaction("Bob", "Charlie", 10.0));
+        Block block1 = new Block(1, blockchain.getLastBlockHash(), transactions1);
+        blockchain.addBlock(block1);
+
+        List<Transaction> transactions2 = new ArrayList<>();
+        transactions2.add(new Transaction("Charlie", "Alice", 5.0));
+        transactions2.add(new Transaction("Bob", "Alice", 2.0));
+        Block block2 = new Block(2, blockchain.getLastBlockHash(), transactions2);
+        blockchain.addBlock(block2);
+
+        // Validate the blockchain
+        System.out.println("Is blockchain valid? " + blockchain.isChainValid());
+    }
+}
